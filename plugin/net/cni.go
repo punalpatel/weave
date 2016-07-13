@@ -12,7 +12,6 @@ import (
 	"github.com/vishvananda/netlink"
 	"github.com/vishvananda/netns"
 	weaveapi "github.com/weaveworks/weave/api"
-	"github.com/weaveworks/weave/common"
 	weavenet "github.com/weaveworks/weave/net"
 	ipamplugin "github.com/weaveworks/weave/plugin/ipam"
 )
@@ -159,7 +158,7 @@ func assignBridgeIP(bridgeName string, ipnet net.IPNet) error {
 var errBridgeNoIP = fmt.Errorf("Bridge has no IP address")
 
 func findBridgeIP(bridgeName string, subnet net.IPNet) (net.IP, error) {
-	netdev, err := common.GetBridgeNetDev(bridgeName)
+	netdev, err := weavenet.GetBridgeNetDev(bridgeName)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get netdev for %q bridge: %s", bridgeName, err)
 	}
@@ -186,14 +185,7 @@ func (c *CNIPlugin) CmdDel(args *skel.CmdArgs) error {
 		return err
 	}
 	defer ns.Close()
-	err = weavenet.WithNetNSUnsafe(ns, func() error {
-		link, err := netlink.LinkByName(args.IfName)
-		if err != nil {
-			return err
-		}
-		return netlink.LinkDel(link)
-	})
-	if err != nil {
+	if _, err = weavenet.WithNetNS(ns, "del-iface", args.IfName); err != nil {
 		return fmt.Errorf("error removing interface: %s", err)
 	}
 
