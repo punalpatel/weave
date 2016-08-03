@@ -69,6 +69,8 @@ func WithNetNSLinkByPidUnsafe(pid int, ifName string, work func(link netlink.Lin
 
 // A safe version of WithNetNS* which creates a process executing
 // "nsenter --net=<ns-path> weaveutil <cmd> [args]".
+//
+// TODO(mp) Fix (indirect) circular dependency (weaveutil -> net -> weaveutil)
 func WithNetNS(nsPath string, cmd string, args ...string) (string, error) {
 	var stdout, stderr bytes.Buffer
 
