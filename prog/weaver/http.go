@@ -124,6 +124,16 @@ func countDNSEntries(entries []nameserver.EntryStatus) int {
 	return count
 }
 
+func countDNSEntriesForPeer(peername string, entries []nameserver.EntryStatus) int {
+	count := 0
+	for _, entry := range entries {
+		if entry.Tombstone == 0 && entry.Origin == peername {
+			count++
+		}
+	}
+	return count
+}
+
 // Print counts in a specified order
 func printCounts(counts map[string]int, keys []string) string {
 	var stringCounts []string
@@ -328,21 +338,24 @@ func HandleHTTP(muxRouter *mux.Router, version string, router *weave.NetworkRout
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
-	reg.MustRegister(newMetrics(router, allocator))
+	reg.MustRegister(newMetrics(router, allocator, ns))
 	muxRouter.Methods("GET").Path("/metrics").Handler(promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 }
 
 type metrics struct {
 	router              *weave.NetworkRouter
 	allocator           *ipam.Allocator
+	ns                  *nameserver.Nameserver
 	connectionCountDesc *prometheus.Desc
 	ipsDesc             *prometheus.Desc
+	dnsDesc             *prometheus.Desc
 }
 
-func newMetrics(router *weave.NetworkRouter, allocator *ipam.Allocator) *metrics {
+func newMetrics(router *weave.NetworkRouter, allocator *ipam.Allocator, ns *nameserver.Nameserver) *metrics {
 	return &metrics{
 		router:    router,
 		allocator: allocator,
+		ns:        ns,
 		connectionCountDesc: prometheus.NewDesc(
 			"weave_connections",
 			"Number of peer-to-peer connections.",
@@ -352,6 +365,12 @@ func newMetrics(router *weave.NetworkRouter, allocator *ipam.Allocator) *metrics
 		ipsDesc: prometheus.NewDesc(
 			"weave_ips",
 			"Number of IP addresses.",
+			[]string{"state"},
+			prometheus.Labels{},
+		),
+		dnsDesc: prometheus.NewDesc(
+			"weave_dns_entries",
+			"Number of DNS entries.",
 			[]string{"state"},
 			prometheus.Labels{},
 		),
@@ -378,9 +397,14 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 	ipamStatus := ipam.NewStatus(m.allocator, address.CIDR{})
 	intMetric(m.ipsDesc, ipamStatus.RangeNumIPs, "total")
 	intMetric(m.ipsDesc, ipamStatus.ActiveIPs, "local-used")
+
+	nsStatus := nameserver.NewNSStatus(m.ns)
+	intMetric(m.dnsDesc, countDNSEntries(nsStatus.Entries), "total")
+	intMetric(m.dnsDesc, countDNSEntriesForPeer(m.router.Ourself.Name.String(), nsStatus.Entries), "local")
 }
 
 func (m *metrics) Describe(ch chan<- *prometheus.Desc) {
 	ch <- m.connectionCountDesc
 	ch <- m.ipsDesc
+	ch <- m.dnsDesc
 }
