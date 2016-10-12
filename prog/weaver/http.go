@@ -68,7 +68,8 @@ var rootTemplate = template.New("root").Funcs(map[string]interface{}{
 
 		// print the local info first
 		if ourStats := peerStats[router.Name]; ourStats != nil {
-			printOwned(router.Name, ourStats.nickname, "", ourStats.ips)
+			activeStr := fmt.Sprintf("(%d active)", status.ActiveIPs)
+			printOwned(router.Name, ourStats.nickname, activeStr, ourStats.ips)
 		}
 
 		// and then the rest
@@ -325,21 +326,30 @@ func HandleHTTP(muxRouter *mux.Router, version string, router *weave.NetworkRout
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
-	reg.MustRegister(newMetrics(router))
+	reg.MustRegister(newMetrics(router, allocator))
 	muxRouter.Methods("GET").Path("/metrics").Handler(promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
 }
 
 type metrics struct {
 	router              *weave.NetworkRouter
+	allocator           *ipam.Allocator
 	connectionCountDesc *prometheus.Desc
+	ipsDesc             *prometheus.Desc
 }
 
-func newMetrics(router *weave.NetworkRouter) *metrics {
+func newMetrics(router *weave.NetworkRouter, allocator *ipam.Allocator) *metrics {
 	return &metrics{
-		router: router,
+		router:    router,
+		allocator: allocator,
 		connectionCountDesc: prometheus.NewDesc(
 			"weave_connections",
 			"Number of peer-to-peer connections.",
+			[]string{"state"},
+			prometheus.Labels{},
+		),
+		ipsDesc: prometheus.NewDesc(
+			"weave_ips",
+			"Number of IP addresses.",
 			[]string{"state"},
 			prometheus.Labels{},
 		),
@@ -362,8 +372,13 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 
 	intMetric(m.connectionCountDesc, len(routerStatus.Connections)-established, "non-established")
 	intMetric(m.connectionCountDesc, established, "established")
+
+	ipamStatus := ipam.NewStatus(m.allocator, address.CIDR{})
+	intMetric(m.ipsDesc, ipamStatus.RangeNumIPs, "total")
+	intMetric(m.ipsDesc, ipamStatus.ActiveIPs, "local-used")
 }
 
 func (m *metrics) Describe(ch chan<- *prometheus.Desc) {
 	ch <- m.connectionCountDesc
+	ch <- m.ipsDesc
 }
