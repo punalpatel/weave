@@ -17,11 +17,7 @@ type EntryStatus struct {
 	Tombstone   int64
 }
 
-func NewStatus(ns *Nameserver, dnsServer *DNSServer) *Status {
-	if dnsServer == nil {
-		return nil
-	}
-
+func NewNSStatus(ns *Nameserver) *Status {
 	ns.RLock()
 	defer ns.RUnlock()
 
@@ -35,12 +31,18 @@ func NewStatus(ns *Nameserver, dnsServer *DNSServer) *Status {
 			entry.Version,
 			entry.Tombstone})
 	}
+	return &Status{Entries: entryStatusSlice}
+}
 
+func NewStatus(ns *Nameserver, dnsServer *DNSServer) *Status {
+	if dnsServer == nil {
+		return nil
+	}
+	status := NewNSStatus(ns)
 	upstreamConfig, _ := dnsServer.upstream.Config()
-	return &Status{
-		dnsServer.domain,
-		upstreamConfig.Servers,
-		dnsServer.address,
-		dnsServer.ttl,
-		entryStatusSlice}
+	status.Domain = dnsServer.domain
+	status.Upstream = upstreamConfig.Servers
+	status.Address = dnsServer.address
+	status.TTL = dnsServer.ttl
+	return status
 }
