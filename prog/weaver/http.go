@@ -325,5 +325,45 @@ func HandleHTTP(muxRouter *mux.Router, version string, router *weave.NetworkRout
 
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(prometheus.NewProcessCollector(os.Getpid(), ""))
+	reg.MustRegister(newMetrics(router))
 	muxRouter.Methods("GET").Path("/metrics").Handler(promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+}
+
+type metrics struct {
+	router              *weave.NetworkRouter
+	connectionCountDesc *prometheus.Desc
+}
+
+func newMetrics(router *weave.NetworkRouter) *metrics {
+	return &metrics{
+		router: router,
+		connectionCountDesc: prometheus.NewDesc(
+			"weave_connections",
+			"Number of peer-to-peer connections.",
+			[]string{"state"},
+			prometheus.Labels{},
+		),
+	}
+}
+
+func (m *metrics) Collect(ch chan<- prometheus.Metric) {
+	intMetric := func(desc *prometheus.Desc, val int, labels ...string) {
+		ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, float64(val), labels...)
+	}
+
+	routerStatus := weave.NewNetworkRouterStatus(m.router)
+
+	established := 0
+	for _, conn := range routerStatus.Connections {
+		if conn.State == "established" {
+			established++
+		}
+	}
+
+	intMetric(m.connectionCountDesc, len(routerStatus.Connections)-established, "non-established")
+	intMetric(m.connectionCountDesc, established, "established")
+}
+
+func (m *metrics) Describe(ch chan<- *prometheus.Desc) {
+	ch <- m.connectionCountDesc
 }
