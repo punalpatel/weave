@@ -318,6 +318,11 @@ func (fastDatapathOverlay) AddFeaturesTo(features map[string]string) {
 	// OverlaySwitch.
 }
 
+type FastDPStatus struct {
+	Vports []VportStatus
+	Flows  []FlowStatus
+}
+
 type FlowStatus odp.FlowInfo
 
 func (flowStatus *FlowStatus) MarshalJSON() ([]byte, error) {
@@ -374,10 +379,7 @@ func (fastdp fastDatapathOverlay) Diagnostics() interface{} {
 		flowStatuses = append(flowStatuses, FlowStatus(flow))
 	}
 
-	return struct {
-		Vports []VportStatus
-		Flows  []FlowStatus
-	}{
+	return FastDPStatus{
 		vportStatuses,
 		flowStatuses,
 	}

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/weaveworks/go-odp/odp"
 
 	"github.com/weaveworks/weave/ipam"
 	"github.com/weaveworks/weave/nameserver"
@@ -25,6 +27,9 @@ type metrics struct {
 	allocator           *ipam.Allocator
 	ns                  *nameserver.Nameserver
 	connectionCountDesc *prometheus.Desc
+	flowsDesc           *prometheus.Desc
+	bytesDesc           *prometheus.Desc
+	packetsDesc         *prometheus.Desc
 	ipsDesc             *prometheus.Desc
 	dnsDesc             *prometheus.Desc
 }
@@ -38,6 +43,24 @@ func newMetrics(router *weave.NetworkRouter, allocator *ipam.Allocator, ns *name
 			"weave_connections",
 			"Number of peer-to-peer connections.",
 			[]string{"state"},
+			prometheus.Labels{},
+		),
+		flowsDesc: prometheus.NewDesc(
+			"weave_flows",
+			"Number of FastDP flows.",
+			[]string{},
+			prometheus.Labels{},
+		),
+		packetsDesc: prometheus.NewDesc(
+			"weave_packets_total",
+			"Number of packets transferred.",
+			[]string{"flow"},
+			prometheus.Labels{},
+		),
+		bytesDesc: prometheus.NewDesc(
+			"weave_bytes_total",
+			"Number of bytes transferred.",
+			[]string{"flow"},
 			prometheus.Labels{},
 		),
 		ipsDesc: prometheus.NewDesc(
@@ -59,6 +82,9 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 	intMetric := func(desc *prometheus.Desc, val int, labels ...string) {
 		ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, float64(val), labels...)
 	}
+	uint64Counter := func(desc *prometheus.Desc, val uint64, labels ...string) {
+		ch <- prometheus.MustNewConstMetric(desc, prometheus.CounterValue, float64(val), labels...)
+	}
 
 	routerStatus := weave.NewNetworkRouterStatus(m.router)
 
@@ -72,6 +98,38 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 	intMetric(m.connectionCountDesc, len(routerStatus.Connections)-established, "non-established")
 	intMetric(m.connectionCountDesc, established, "established")
 
+	flowTag := func(f weave.FlowStatus) string {
+		for _, k := range f.FlowKeys {
+			if fk, ok := k.(odp.EthernetFlowKey); ok {
+				ek := fk.Key() // TODO: worry about the Mask
+				src := net.HardwareAddr(ek.EthSrc[:]).String()
+				dst := net.HardwareAddr(ek.EthDst[:]).String()
+				return src + "->" + dst
+			}
+		}
+		return "other"
+	}
+
+	flows := 0
+	var totalPackets, totalBytes uint64
+	if diagMap, ok := routerStatus.OverlayDiagnostics.(map[string]interface{}); ok {
+		if fastDPEntry, ok := diagMap["fastdp"]; ok {
+			if fastDPStatus, ok := fastDPEntry.(weave.FastDPStatus); ok {
+				flows = len(fastDPStatus.Flows)
+				for _, flow := range fastDPStatus.Flows {
+					tag := flowTag(flow)
+					uint64Counter(m.packetsDesc, flow.Packets, tag)
+					uint64Counter(m.bytesDesc, flow.Bytes, tag)
+					totalPackets += flow.Packets
+					totalBytes += flow.Bytes
+				}
+			}
+		}
+	}
+	intMetric(m.flowsDesc, flows)
+	uint64Counter(m.bytesDesc, totalBytes, "total")
+	uint64Counter(m.packetsDesc, totalPackets, "total")
+
 	ipamStatus := ipam.NewStatus(m.allocator, address.CIDR{})
 	intMetric(m.ipsDesc, ipamStatus.RangeNumIPs, "total")
 	intMetric(m.ipsDesc, ipamStatus.ActiveIPs, "local-used")
@@ -83,6 +141,9 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 
 func (m *metrics) Describe(ch chan<- *prometheus.Desc) {
 	ch <- m.connectionCountDesc
+	ch <- m.flowsDesc
+	ch <- m.bytesDesc
+	ch <- m.packetsDesc
 	ch <- m.ipsDesc
 	ch <- m.dnsDesc
 }
