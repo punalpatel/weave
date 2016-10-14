@@ -1,13 +1,11 @@
 package main
 
 import (
-	"net"
 	"net/http"
 	"os"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/weaveworks/go-odp/odp"
 
 	"github.com/weaveworks/weave/ipam"
 	"github.com/weaveworks/weave/nameserver"
@@ -98,18 +96,6 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 	intMetric(m.connectionCountDesc, len(routerStatus.Connections)-established, "non-established")
 	intMetric(m.connectionCountDesc, established, "established")
 
-	flowTag := func(f weave.FlowStatus) string {
-		for _, k := range f.FlowKeys {
-			if fk, ok := k.(odp.EthernetFlowKey); ok {
-				ek := fk.Key() // TODO: worry about the Mask
-				src := net.HardwareAddr(ek.EthSrc[:]).String()
-				dst := net.HardwareAddr(ek.EthDst[:]).String()
-				return src + "->" + dst
-			}
-		}
-		return "other"
-	}
-
 	flows := 0
 	var totalPackets, totalBytes uint64
 	if diagMap, ok := routerStatus.OverlayDiagnostics.(map[string]interface{}); ok {
@@ -117,9 +103,9 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 			if fastDPStatus, ok := fastDPEntry.(weave.FastDPStatus); ok {
 				flows = len(fastDPStatus.Flows)
 				for _, flow := range fastDPStatus.Flows {
-					tag := flowTag(flow)
-					uint64Counter(m.packetsDesc, flow.Packets, tag)
-					uint64Counter(m.bytesDesc, flow.Bytes, tag)
+					//tag := flowTag(flow)
+					//uint64Counter(m.packetsDesc, flow.Packets, tag)
+					//uint64Counter(m.bytesDesc, flow.Bytes, tag)
 					totalPackets += flow.Packets
 					totalBytes += flow.Bytes
 				}
