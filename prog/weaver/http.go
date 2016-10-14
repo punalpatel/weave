@@ -276,7 +276,8 @@ type WeaveStatus struct {
 	DNS          *nameserver.Status         `json:"DNS,omitempty"`
 }
 
-func HandleHTTP(muxRouter *mux.Router, version string, router *weave.NetworkRouter, allocator *ipam.Allocator, defaultSubnet address.CIDR, ns *nameserver.Nameserver, dnsserver *nameserver.DNSServer) {
+// Read-only functions, suitable for exposing on an unprotected socket
+func HandleHTTPStatus(muxRouter *mux.Router, version string, router *weave.NetworkRouter, allocator *ipam.Allocator, defaultSubnet address.CIDR, ns *nameserver.Nameserver, dnsserver *nameserver.DNSServer) {
 	status := func() WeaveStatus {
 		return WeaveStatus{
 			version,

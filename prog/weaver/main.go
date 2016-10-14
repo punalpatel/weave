@@ -338,7 +338,8 @@ func main() {
 			ns.HandleHTTP(muxRouter, dockerCli)
 		}
 		router.HandleHTTP(muxRouter)
-		HandleHTTP(muxRouter, version, router, allocator, defaultSubnet, ns, dnsserver)
+		HandleHTTPStatus(muxRouter, version, router, allocator, defaultSubnet, ns, dnsserver)
+		muxRouter.Methods("GET").Path("/metrics").Handler(metricsHandler(router, allocator, ns))
 		http.Handle("/", common.LoggingHTTPHandler(muxRouter))
 		Log.Println("Listening for HTTP control messages on", httpAddr)
 		go listenAndServeHTTP(httpAddr, nil)
@@ -346,6 +347,7 @@ func main() {
 
 	if statusAddr != "" {
 		muxRouter := mux.NewRouter()
+		HandleHTTPStatus(muxRouter, version, router, allocator, defaultSubnet, ns, dnsserver)
 		muxRouter.Methods("GET").Path("/metrics").Handler(metricsHandler(router, allocator, ns))
 		statusMux := http.NewServeMux()
 		statusMux.Handle("/", muxRouter)
