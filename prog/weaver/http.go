@@ -332,6 +332,4 @@ func HandleHTTP(muxRouter *mux.Router, version string, router *weave.NetworkRout
 	defHandler("/status/peers", peersTemplate)
 	defHandler("/status/dns", dnsEntriesTemplate)
 	defHandler("/status/ipam", ipamTemplate)
-
-	muxRouter.Methods("GET").Path("/metrics").Handler(metricsHandler(router, allocator, ns))
 }
