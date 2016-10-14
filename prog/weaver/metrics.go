@@ -25,6 +25,7 @@ type metrics struct {
 	allocator           *ipam.Allocator
 	ns                  *nameserver.Nameserver
 	connectionCountDesc *prometheus.Desc
+	terminationDesc     *prometheus.Desc
 	flowsDesc           *prometheus.Desc
 	bytesDesc           *prometheus.Desc
 	packetsDesc         *prometheus.Desc
@@ -41,6 +42,12 @@ func newMetrics(router *weave.NetworkRouter, allocator *ipam.Allocator, ns *name
 			"weave_connections",
 			"Number of peer-to-peer connections.",
 			[]string{"state"},
+			prometheus.Labels{},
+		),
+		terminationDesc: prometheus.NewDesc(
+			"weave_connection_termination_count",
+			"Number of peer-to-peer connections terminated.",
+			[]string{},
 			prometheus.Labels{},
 		),
 		flowsDesc: prometheus.NewDesc(
@@ -95,6 +102,7 @@ func (m *metrics) Collect(ch chan<- prometheus.Metric) {
 
 	intMetric(m.connectionCountDesc, len(routerStatus.Connections)-established, "non-established")
 	intMetric(m.connectionCountDesc, established, "established")
+	uint64Counter(m.terminationDesc, uint64(routerStatus.TerminationCount))
 
 	flows := 0
 	var totalPackets, totalBytes uint64
