@@ -82,3 +82,6 @@
 [submodule "vendor/github.com/weaveworks/docker"]
 	path = vendor/github.com/weaveworks/docker
 	url = https://github.com/weaveworks/docker
+[submodule "vendor/k8s.io/client-go"]
+	path = vendor/k8s.io/client-go
+	url = https://github.com/kubernetes/client-go
