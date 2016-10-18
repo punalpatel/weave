@@ -19,7 +19,7 @@ func containerAddrs(args []string) error {
 		return err
 	}
 
-	peers, err := weavenet.ConnectedToBridgePeers(bridgeName)
+	peers, err := weavenet.ConnectedToBridgeVethPeerIds(bridgeName)
 	if err != nil {
 		if err == weavenet.ErrLinkNotFound {
 			return nil
@@ -64,7 +64,7 @@ func getNetDevs(c *docker.Client, container *docker.Container, peers []int) ([]w
 	if container.State.Pid == 0 {
 		return nil, nil
 	}
-	return weavenet.GetWeaveNetDevsByPeers(container.State.Pid, peers)
+	return weavenet.GetWeaveNetDevsByVethPeerIds(container.State.Pid, peers)
 }
 
 func printNetDevs(cid string, netDevs []weavenet.Dev) {

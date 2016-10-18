@@ -13,7 +13,7 @@ func processAddrs(args []string) error {
 	}
 	bridgeName := args[0]
 
-	peers, err := weavenet.ConnectedToBridgePeers(bridgeName)
+	peers, err := weavenet.ConnectedToBridgeVethPeerIds(bridgeName)
 	if err != nil {
 		if err == weavenet.ErrLinkNotFound {
 			return nil
@@ -27,7 +27,7 @@ func processAddrs(args []string) error {
 	}
 
 	for _, pid := range pids {
-		netDevs, err := weavenet.GetWeaveNetDevsByPeers(pid, peers)
+		netDevs, err := weavenet.GetWeaveNetDevsByVethPeerIds(pid, peers)
 		if err != nil {
 			return err
 		}

@@ -64,11 +64,11 @@ func LinkToNetDev(link netlink.Link) (Dev, error) {
 	return netDev, nil
 }
 
-// ConnectedToBridgePeers returns peer indexes of veth links connected to the given
-// bridge. The peer index is used to query from a container netns whether the
-// container is connected to the bridge.
-func ConnectedToBridgePeers(bridgeName string) ([]int, error) {
-	var peers []int
+// ConnectedToBridgeVethPeerIds returns peer indexes of veth links connected to
+// the given bridge. The peer index is used to query from a container netns
+// whether the container is connected to the bridge.
+func ConnectedToBridgeVethPeerIds(bridgeName string) ([]int, error) {
+	var ids []int
 
 	br, err := netlink.LinkByName(bridgeName)
 	if err != nil {
@@ -79,35 +79,35 @@ func ConnectedToBridgePeers(bridgeName string) ([]int, error) {
 		return nil, err
 	}
 
-	// TODO(mp) check rtnetlink.c maybe there is a better way to list links connected
-	// to bridge
+	// TODO(mp) list /sys/class/net/weave/brif
+
 	for _, link := range links {
 		if _, isveth := link.(*netlink.Veth); isveth && link.Attrs().MasterIndex == br.Attrs().Index {
-			peerIndex := link.Attrs().ParentIndex
-			if peerIndex == 0 {
+			peerID := link.Attrs().ParentIndex
+			if peerID == 0 {
 				// perhaps running on an older kernel where ParentIndex doesn't work.
 				// as fall-back, assume the peers are consecutive
-				peerIndex = link.Attrs().Index - 1
+				peerID = link.Attrs().Index - 1
 			}
-			peers = append(peers, peerIndex)
+			ids = append(ids, peerID)
 		}
 	}
 
-	return peers, nil
+	return ids, nil
 }
 
 // Lookup the weave interface of a container
 func GetWeaveNetDevs(processID int) ([]Dev, error) {
 	// TODO(mp) pass by name
-	peers, err := ConnectedToBridgePeers("weave")
+	peerIDs, err := ConnectedToBridgeVethPeerIds("weave")
 	if err != nil {
 		return nil, err
 	}
 
-	return GetWeaveNetDevsByPeers(processID, peers)
+	return GetWeaveNetDevsByVethPeerIds(processID, peerIDs)
 }
 
-func GetWeaveNetDevsByPeers(processID int, peers []int) ([]Dev, error) {
+func GetWeaveNetDevsByVethPeerIds(processID int, peerIDs []int) ([]Dev, error) {
 	// Bail out if this container is running in the root namespace
 	netnsRoot, err := netns.GetFromPid(1)
 	if err != nil {
@@ -128,10 +128,10 @@ func GetWeaveNetDevsByPeers(processID int, peers []int) ([]Dev, error) {
 	}
 
 	var netdevs []Dev
-	peersStr := make([]string, len(peers))
 
-	for i, peer := range peers {
-		peersStr[i] = strconv.Itoa(peer)
+	peersStr := make([]string, len(peerIDs))
+	for i, id := range peerIDs {
+		peersStr[i] = strconv.Itoa(id)
 	}
 	netdevsStr, err := WithNetNSByPid(processID, "list-netdevs", strings.Join(peersStr, ","))
 	if err != nil {
