@@ -112,10 +112,16 @@ func GetWeaveNetDevsByPeers(processID int, peers []int) ([]Dev, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to open root namespace: %s", err)
 	}
+	defer netnsRoot.Close()
 	netnsContainer, err := netns.GetFromPid(processID)
 	if err != nil {
+		// Unable to find a namespace for this process - just return nothing
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("unable to open process %d namespace: %s", processID, err)
 	}
+	defer netnsContainer.Close()
 	if netnsRoot.Equal(netnsContainer) {
 		return nil, nil
 	}
